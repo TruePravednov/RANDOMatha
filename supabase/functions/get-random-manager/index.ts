@@ -76,11 +76,12 @@ Deno.serve(async (req: Request) => {
 
     // Приоритетный выбор менеджера
     let eligibleManagers = [];
+    let minCount = 0;
 
     // Приоритет 1: Менеджеры, которые еще не были выбраны сегодня (last_call_successful IS NULL)
     const neverCalled = managers.filter(m => m.last_call_successful === null);
     if (neverCalled.length > 0) {
-      const minCount = Math.min(...neverCalled.map(m => m.selection_count_today || 0));
+      minCount = Math.min(...neverCalled.map(m => m.selection_count_today || 0));
       eligibleManagers = neverCalled.filter(m => (m.selection_count_today || 0) === minCount);
     }
 
@@ -88,7 +89,7 @@ Deno.serve(async (req: Request) => {
     if (eligibleManagers.length === 0) {
       const unsuccessfulCalls = managers.filter(m => m.last_call_successful === false);
       if (unsuccessfulCalls.length > 0) {
-        const minCount = Math.min(...unsuccessfulCalls.map(m => m.selection_count_today || 0));
+        minCount = Math.min(...unsuccessfulCalls.map(m => m.selection_count_today || 0));
         eligibleManagers = unsuccessfulCalls.filter(m => (m.selection_count_today || 0) === minCount);
       }
     }
@@ -97,7 +98,7 @@ Deno.serve(async (req: Request) => {
     if (eligibleManagers.length === 0) {
       const successfulCalls = managers.filter(m => m.last_call_successful === true);
       if (successfulCalls.length > 0) {
-        const minCount = Math.min(...successfulCalls.map(m => m.selection_count_today || 0));
+        minCount = Math.min(...successfulCalls.map(m => m.selection_count_today || 0));
         eligibleManagers = successfulCalls.filter(m => (m.selection_count_today || 0) === minCount);
       }
     }
