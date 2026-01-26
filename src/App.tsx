@@ -3,6 +3,10 @@ import { Shuffle, Check, X, RefreshCw, Clock, Users, BarChart3, Download } from 
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// DEBUG: Check if environment variables are loaded
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.error('WARNING: Supabase environment variables not configured. Using placeholder values.');
+}
 
 const BUTTON_TEXTS = [
   "Покемон, я выбираю тебя!",
