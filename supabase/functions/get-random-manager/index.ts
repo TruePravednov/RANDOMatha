@@ -74,10 +74,22 @@ Deno.serve(async (req: Request) => {
       managers.splice(0, managers.length, ...resetManagers!);
     }
 
-    // НОВАЯ ЛОГИКА: В рандом попадают ТОЛЬКО те, кто еще НЕ ВЫБИРАЛСЯ сегодня
-    const eligibleManagers = managers.filter(m => (m.selection_count_today || 0) === 0);
+    // МНОГОУРОВНЕВАЯ СИСТЕМА КРУГОВ
 
-    // Если все уже выбирались - сбрасываем круг и начинаем заново
+    // КРУГ 1: В рандом попадают те, кто еще НЕ ВЫБИРАЛСЯ (selection_count = 0)
+    let eligibleManagers = managers.filter(m => (m.selection_count_today || 0) === 0);
+    let currentRound = 1;
+
+    // Если КРУГ 1 закончился (все выбрались хотя бы раз)
+    if (eligibleManagers.length === 0) {
+      // КРУГ 2: В рандом попадают ТОЛЬКО те, кого НЕ ОТМЕТИЛИ или НЕДОЗВОН
+      eligibleManagers = managers.filter(m =>
+        m.last_call_successful === null || m.last_call_successful === false
+      );
+      currentRound = 2;
+    }
+
+    // Если и КРУГ 2 закончился (всех отметили) - ПОЛНЫЙ СБРОС
     if (eligibleManagers.length === 0) {
       await supabase
         .from("managers")
@@ -89,8 +101,9 @@ Deno.serve(async (req: Request) => {
 
       return new Response(
         JSON.stringify({
-          error: "Все менеджеры прошли круг! Система сброшена. Нажмите еще раз.",
-          resetPerformed: true
+          error: "Все круги пройдены! Система полностью сброшена. Нажмите еще раз.",
+          resetPerformed: true,
+          roundCompleted: 2
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );

@@ -68,24 +68,31 @@ Deno.serve(async (req: Request) => {
       managers.splice(0, managers.length, ...resetManagers!);
     }
 
-    // НОВАЯ ЛОГИКА ОЧЕРЕДИ:
-    // 1. Не выбирались (попадают в рандом)
+    // МНОГОУРОВНЕВАЯ СИСТЕМА ОЧЕРЕДИ:
+
+    // КРУГ 1: Не выбирались (попадают в рандом СЕЙЧАС)
     const notSelected = managers.filter(m => (m.selection_count_today || 0) === 0);
 
-    // 2. Недозвон (выбрали и отметили "не дозвонились")
+    // КРУГ 2: Недозвон (попадут в рандом, когда КРУГ 1 закончится)
     const unsuccessfulCalls = managers.filter(m =>
       (m.selection_count_today || 0) > 0 && m.last_call_successful === false
     );
 
-    // 3. Просто выбрали (выбрали, но еще не отметили результат)
+    // КРУГ 2: Просто выбрали (попадут в рандом, когда КРУГ 1 закончится)
     const justSelected = managers.filter(m =>
       (m.selection_count_today || 0) > 0 && m.last_call_successful === null
     );
 
-    // 4. Дозвонились (выбрали и отметили "дозвонились")
+    // Завершили: Дозвонились (не попадут в рандом до полного сброса)
     const successfulCalls = managers.filter(m =>
       (m.selection_count_today || 0) > 0 && m.last_call_successful === true
     );
+
+    // Определяем текущий круг
+    let currentRound = 1;
+    if (notSelected.length === 0) {
+      currentRound = 2;
+    }
 
     // Сортируем каждую группу по количеству выборов
     const sortByCount = (a: any, b: any) =>
@@ -96,36 +103,46 @@ Deno.serve(async (req: Request) => {
     justSelected.sort(sortByCount);
     successfulCalls.sort(sortByCount);
 
-    // Формируем упорядоченную очередь
+    // Формируем упорядоченную очередь с указанием круга
     const queue = [
       ...notSelected.map(m => ({
         name: m.name,
-        priority: 'В очереди (попадет в рандом)',
+        priority: '🎯 КРУГ 1 - попадет в рандом СЕЙЧАС',
         selectionCount: m.selection_count_today || 0,
-        lastCallSuccessful: m.last_call_successful
+        lastCallSuccessful: m.last_call_successful,
+        round: 1
       })),
       ...unsuccessfulCalls.map(m => ({
         name: m.name,
-        priority: 'Недозвон',
+        priority: '⏳ КРУГ 2 - недозвон (попадет в рандом после КРУГА 1)',
         selectionCount: m.selection_count_today || 0,
-        lastCallSuccessful: m.last_call_successful
+        lastCallSuccessful: m.last_call_successful,
+        round: 2
       })),
       ...justSelected.map(m => ({
         name: m.name,
-        priority: 'Просто выбрали',
+        priority: '⏳ КРУГ 2 - не отметили (попадет в рандом после КРУГА 1)',
         selectionCount: m.selection_count_today || 0,
-        lastCallSuccessful: m.last_call_successful
+        lastCallSuccessful: m.last_call_successful,
+        round: 2
       })),
       ...successfulCalls.map(m => ({
         name: m.name,
-        priority: 'Дозвонились',
+        priority: '✅ Дозвонились (больше не попадет в рандом)',
         selectionCount: m.selection_count_today || 0,
-        lastCallSuccessful: m.last_call_successful
+        lastCallSuccessful: m.last_call_successful,
+        round: 3
       }))
     ];
 
     return new Response(
-      JSON.stringify({ queue }),
+      JSON.stringify({
+        queue,
+        currentRound,
+        round1Remaining: notSelected.length,
+        round2Remaining: unsuccessfulCalls.length + justSelected.length,
+        completed: successfulCalls.length
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
