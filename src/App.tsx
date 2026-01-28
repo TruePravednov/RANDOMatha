@@ -125,10 +125,6 @@ function App() {
             </button>
           </div>
 
-          <button className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg mt-4 flex items-center justify-center gap-2">
-            <span>⚡</span>
-            Приняти в жертву
-          </button>
 
           <button className="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-lg mt-3 flex items-center justify-center gap-2">
             <span>📋</span>
