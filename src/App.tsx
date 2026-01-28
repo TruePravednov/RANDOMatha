@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-
 import { Shuffle } from 'lucide-react';
 
 const GOOGLE_SHEETS_CSV_URL = 'https://docs.google.com/spreadsheets/d/15_rKGMjb7pamSu2dscRPzV-j17JdCP_ahJqGnafut0Q/export?format=csv&gid=0';
@@ -24,6 +23,10 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [buttonText, setButtonText] = useState("");
   const [animating, setAnimating] = useState(false);
+  const [showQueue, setShowQueue] = useState(false);
+  const [showCodeInput, setShowCodeInput] = useState(false);
+  const [codeInput, setCodeInput] = useState('');
+  const [codeError, setCodeError] = useState('');
 
   useEffect(() => {
     const loadManagers = async () => {
@@ -78,12 +81,35 @@ function App() {
     }, 1000);
   };
 
+  const toggleQueue = () => {
+    if (showQueue) {
+      setShowQueue(false);
+      setShowCodeInput(false);
+      setCodeInput('');
+      setCodeError('');
+    } else {
+      setShowCodeInput(true);
+    }
+  };
+
+  const handleCodeSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (codeInput === '7610') {
+      setShowQueue(true);
+      setShowCodeInput(false);
+      setCodeInput('');
+      setCodeError('');
+    } else {
+      setCodeError('Неверный код доступа');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-4 flex items-center justify-center">
       <div className="max-w-2xl w-full">
         <div className="bg-white rounded-2xl shadow-2xl p-8 text-center">
           <h1 className="text-3xl font-bold text-gray-800 mb-8">🎰 Рандомайзер Менеджеров</h1>
-
+          
           <div className="mb-4 text-sm text-gray-600">
             Загружено менеджеров: <span className="font-bold">{managers.length}</span>
           </div>
@@ -114,7 +140,7 @@ function App() {
             {loading || animating ? 'Крутим барабан...' : buttonText}
           </button>
 
-                    <div className="flex gap-3 mt-4">
+          <div className="flex gap-3 mt-4">
             <button className="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2">
               <span>☎️</span>
               Дозвонились ✓
@@ -125,11 +151,54 @@ function App() {
             </button>
           </div>
 
-
-          <button className="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-lg mt-3 flex items-center justify-center gap-2">
+          <button 
+            onClick={toggleQueue}
+            className="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-lg mt-3 flex items-center justify-center gap-2"
+          >
             <span>📋</span>
-            Показать очередь
+            {showQueue ? 'Скрыть очередь' : 'Показать очередь'}
           </button>
+
+          {showCodeInput && (
+            <form onSubmit={handleCodeSubmit} className="mt-4">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={codeInput}
+                  onChange={(e) => setCodeInput(e.target.value)}
+                  placeholder="Введите код доступа"
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  type="submit"
+                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg"
+                >
+                  OK
+                </button>
+              </div>
+              {codeError && (
+                <p className="mt-2 text-sm text-red-600">{codeError}</p>
+              )}
+            </form>
+          )}
+
+          {showQueue && (
+            <div className="mt-6 max-h-96 overflow-y-auto">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Очередь менеджеров</h3>
+              <div className="space-y-2">
+                {managers.map((manager, index) => (
+                  <div
+                    key={index}
+                    className="p-3 bg-gray-50 rounded-lg text-left flex items-center justify-between"
+                  >
+                    <span className="font-medium text-gray-700">
+                      #{index + 1} {manager}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="mt-6 text-xs text-gray-500">
             Данные загружаются из Google Таблицы
