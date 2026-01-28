@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Shuffle, Phone, PhoneOff } from 'lucide-react';
+import { Shuffle, Phone, PhoneOff, List, X } from 'lucide-react';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -17,6 +17,13 @@ const BUTTON_TEXTS = [
   "Ты водишь!"
 ];
 
+interface QueueItem {
+  name: string;
+  priority: string;
+  selectionCount: number;
+  lastCallSuccessful: boolean | null;
+}
+
 function App() {
   const [totalManagers, setTotalManagers] = useState(0);
   const [selectedManager, setSelectedManager] = useState<string | null>(null);
@@ -27,6 +34,9 @@ function App() {
   const [animating, setAnimating] = useState(false);
   const [callResultMarked, setCallResultMarked] = useState(false);
   const [markingResult, setMarkingResult] = useState(false);
+  const [showQueue, setShowQueue] = useState(false);
+  const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [loadingQueue, setLoadingQueue] = useState(false);
 
   useEffect(() => {
     const randomText = BUTTON_TEXTS[Math.floor(Math.random() * BUTTON_TEXTS.length)];
@@ -73,6 +83,41 @@ function App() {
     }
   };
 
+  const loadQueue = async () => {
+    setLoadingQueue(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/get-queue`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Ошибка при получении очереди');
+      }
+
+      const data = await response.json();
+      setQueue(data.queue);
+    } catch (err) {
+      console.error('Failed to load queue:', err);
+      setError(err instanceof Error ? err.message : 'Ошибка при загрузке очереди');
+    } finally {
+      setLoadingQueue(false);
+    }
+  };
+
+  const toggleQueue = () => {
+    if (!showQueue) {
+      loadQueue();
+    }
+    setShowQueue(!showQueue);
+  };
+
   const markCallResult = async (isSuccessful: boolean) => {
     if (!selectionId) return;
 
@@ -98,11 +143,28 @@ function App() {
       }
 
       setCallResultMarked(true);
+
+      if (showQueue) {
+        await loadQueue();
+      }
     } catch (err) {
       console.error('Failed to mark call result:', err);
       setError(err instanceof Error ? err.message : 'Ошибка при сохранении результата');
     } finally {
       setMarkingResult(false);
+    }
+  };
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'Ещё не звонили':
+        return 'bg-gray-100 text-gray-800 border-gray-300';
+      case 'Недозвон':
+        return 'bg-amber-100 text-amber-800 border-amber-300';
+      case 'Дозвонились':
+        return 'bg-green-100 text-green-800 border-green-300';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-300';
     }
   };
 
@@ -170,6 +232,69 @@ function App() {
             <Shuffle className={loading || animating ? 'animate-spin' : ''} size={28} />
             {loading || animating ? 'Крутим барабан...' : buttonText}
           </button>
+
+          <button
+            onClick={toggleQueue}
+            className="mt-4 w-full py-3 px-6 bg-slate-600 hover:bg-slate-700 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-3 shadow-lg hover:shadow-xl"
+          >
+            {showQueue ? <X size={20} /> : <List size={20} />}
+            {showQueue ? 'Скрыть очередь' : 'Показать очередь'}
+          </button>
+
+          {showQueue && (
+            <div className="mt-6 bg-gray-50 rounded-xl p-4 max-h-96 overflow-y-auto">
+              <h2 className="text-xl font-bold text-gray-800 mb-4">📋 Очередь менеджеров</h2>
+
+              {loadingQueue ? (
+                <div className="text-center py-8 text-gray-500">
+                  Загрузка очереди...
+                </div>
+              ) : queue.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  Нет данных
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {queue.map((item, index) => (
+                    <div
+                      key={index}
+                      className={`p-4 rounded-lg border-2 transition-all ${getPriorityColor(item.priority)}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg font-bold text-gray-600">#{index + 1}</span>
+                          <span className="font-semibold">{item.name}</span>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs font-medium">{item.priority}</div>
+                          <div className="text-xs text-gray-600 mt-1">
+                            Выборов: {item.selectionCount}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="mt-4 pt-4 border-t border-gray-300">
+                <div className="flex flex-wrap gap-4 text-xs">
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 bg-gray-100 border-2 border-gray-300 rounded"></div>
+                    <span>Ещё не звонили</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 bg-amber-100 border-2 border-amber-300 rounded"></div>
+                    <span>Недозвон</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 bg-green-100 border-2 border-green-300 rounded"></div>
+                    <span>Дозвонились</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="mt-6 text-xs text-gray-500">
             Умная очередь с приоритетами • База данных Supabase
