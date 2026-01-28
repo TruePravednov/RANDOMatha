@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Shuffle, Phone, PhoneOff, List, X } from 'lucide-react';
+import { Shuffle } from 'lucide-react';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const GOOGLE_SHEETS_CSV_URL = 'https://docs.google.com/spreadsheets/d/15_rKGMjb7pamSu2dscRPzV-j17JdCP_ahJqGnafut0Q/export?format=csv&gid=0';
 
 const BUTTON_TEXTS = [
   "Покемон, я выбираю тебя!",
@@ -17,176 +16,65 @@ const BUTTON_TEXTS = [
   "Ты водишь!"
 ];
 
-interface QueueItem {
-  name: string;
-  priority: string;
-  selectionCount: number;
-  lastCallSuccessful: boolean | null;
-}
-
 function App() {
-  const [totalManagers, setTotalManagers] = useState(0);
+  const [managers, setManagers] = useState<string[]>([]);
   const [selectedManager, setSelectedManager] = useState<string | null>(null);
-  const [selectionId, setSelectionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [buttonText, setButtonText] = useState("");
   const [animating, setAnimating] = useState(false);
-  const [callResultMarked, setCallResultMarked] = useState(false);
-  const [markingResult, setMarkingResult] = useState(false);
-  const [showQueue, setShowQueue] = useState(false);
-  const [queue, setQueue] = useState<QueueItem[]>([]);
-  const [loadingQueue, setLoadingQueue] = useState(false);
-  const [showCodeInput, setShowCodeInput] = useState(false);
-  const [codeInput, setCodeInput] = useState('');
-  const [codeError, setCodeError] = useState('');
 
   useEffect(() => {
+    const loadManagers = async () => {
+      try {
+        const response = await fetch(GOOGLE_SHEETS_CSV_URL);
+        const csvText = await response.text();
+        
+        const lines = csvText.split('\n');
+        const managerNames: string[] = [];
+        
+        for (let i = 3; i < lines.length; i++) {
+          const columns = lines[i].split(',');
+          if (columns.length > 1 && columns[1].trim()) {
+            const name = columns[1].trim().replace(/"/g, '');
+            if (name && name !== 'КМ' && name.length > 2) {
+              managerNames.push(name);
+            }
+          }
+        }
+        
+        console.log('Loaded managers:', managerNames);
+        setManagers(managerNames);
+      } catch (err) {
+        console.error('Failed to load managers:', err);
+        setError('Ошибка загрузки данных');
+      }
+    };
+
+    loadManagers();
     const randomText = BUTTON_TEXTS[Math.floor(Math.random() * BUTTON_TEXTS.length)];
     setButtonText(randomText);
   }, []);
 
-  const handleShuffle = async () => {
+  const handleShuffle = () => {
+    if (managers.length === 0) {
+      setError('Список менеджеров пуст');
+      return;
+    }
+
     setLoading(true);
     setAnimating(true);
     setError(null);
-    setCallResultMarked(false);
 
     const newText = BUTTON_TEXTS[Math.floor(Math.random() * BUTTON_TEXTS.length)];
     setButtonText(newText);
 
-    try {
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/get-random-manager`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Ошибка при получении менеджера');
-      }
-
-      const data = await response.json();
-
-      setTimeout(() => {
-        setSelectedManager(data.name);
-        setSelectionId(data.selectionId);
-        setTotalManagers(data.total);
-        setAnimating(false);
-        setLoading(false);
-      }, 1000);
-    } catch (err) {
-      console.error('Failed to get random manager:', err);
-      setError(err instanceof Error ? err.message : 'Ошибка при выборе менеджера');
+    setTimeout(() => {
+      const randomIndex = Math.floor(Math.random() * managers.length);
+      setSelectedManager(managers[randomIndex]);
       setAnimating(false);
       setLoading(false);
-    }
-  };
-
-  const loadQueue = async () => {
-    setLoadingQueue(true);
-    setError(null);
-
-    try {
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/get-queue`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Ошибка при получении очереди');
-      }
-
-      const data = await response.json();
-      setQueue(data.queue);
-    } catch (err) {
-      console.error('Failed to load queue:', err);
-      setError(err instanceof Error ? err.message : 'Ошибка при загрузке очереди');
-    } finally {
-      setLoadingQueue(false);
-    }
-  };
-
-  const toggleQueue = () => {
-    if (showQueue) {
-      setShowQueue(false);
-      setShowCodeInput(false);
-      setCodeInput('');
-      setCodeError('');
-    } else {
-      setShowCodeInput(true);
-    }
-  };
-
-  const handleCodeSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (codeInput === '7610') {
-      setShowQueue(true);
-      setShowCodeInput(false);
-      setCodeError('');
-      setCodeInput('');
-      loadQueue();
-    } else {
-      setCodeError('Неверный код доступа');
-      setCodeInput('');
-    }
-  };
-
-  const markCallResult = async (isSuccessful: boolean) => {
-    if (!selectionId) return;
-
-    setMarkingResult(true);
-    setError(null);
-
-    try {
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/mark-call-result`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          selectionId,
-          isSuccessful
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Ошибка при отметке результата');
-      }
-
-      setCallResultMarked(true);
-
-      if (showQueue) {
-        await loadQueue();
-      }
-    } catch (err) {
-      console.error('Failed to mark call result:', err);
-      setError(err instanceof Error ? err.message : 'Ошибка при сохранении результата');
-    } finally {
-      setMarkingResult(false);
-    }
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'Ещё не звонили':
-        return 'bg-gray-100 text-gray-800 border-gray-300';
-      case 'Недозвон':
-        return 'bg-amber-100 text-amber-800 border-amber-300';
-      case 'Дозвонились':
-        return 'bg-green-100 text-green-800 border-green-300';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-300';
-    }
+    }, 1000);
   };
 
   return (
@@ -195,47 +83,18 @@ function App() {
         <div className="bg-white rounded-2xl shadow-2xl p-8 text-center">
           <h1 className="text-3xl font-bold text-gray-800 mb-8">🎰 Рандомайзер Менеджеров</h1>
 
-          {totalManagers > 0 && (
-            <div className="mb-4 text-sm text-gray-600">
-              Менеджеров в базе: <span className="font-bold">{totalManagers}</span>
-            </div>
-          )}
+          <div className="mb-4 text-sm text-gray-600">
+            Загружено менеджеров: <span className="font-bold">{managers.length}</span>
+          </div>
 
           {(selectedManager || animating) && (
-            <div className="mb-6">
+            <div className="mb-8">
               <div className={`p-8 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl transition-all duration-500 ${animating ? 'scale-105 animate-pulse' : 'scale-100'}`}>
                 <p className="text-blue-100 text-sm mb-3">Выбран:</p>
                 <p className={`text-4xl font-bold text-white transition-all duration-300 ${animating ? 'blur-sm' : 'blur-0'}`}>
                   {animating ? '???' : selectedManager}
                 </p>
               </div>
-
-              {!animating && !callResultMarked && selectedManager && (
-                <div className="mt-6 flex gap-4">
-                  <button
-                    onClick={() => markCallResult(true)}
-                    disabled={markingResult}
-                    className="flex-1 py-4 px-6 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-3 shadow-lg hover:shadow-xl disabled:cursor-not-allowed"
-                  >
-                    <Phone size={24} />
-                    {markingResult ? 'Сохраняем...' : 'Дозвонились ✓'}
-                  </button>
-                  <button
-                    onClick={() => markCallResult(false)}
-                    disabled={markingResult}
-                    className="flex-1 py-4 px-6 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-3 shadow-lg hover:shadow-xl disabled:cursor-not-allowed"
-                  >
-                    <PhoneOff size={24} />
-                    {markingResult ? 'Сохраняем...' : 'Не дозвонились ✗'}
-                  </button>
-                </div>
-              )}
-
-              {callResultMarked && (
-                <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 font-medium">
-                  ✓ Результат сохранен
-                </div>
-              )}
             </div>
           )}
 
@@ -247,119 +106,15 @@ function App() {
 
           <button
             onClick={handleShuffle}
-            disabled={loading || animating || markingResult}
+            disabled={loading || animating || managers.length === 0}
             className="w-full py-4 px-6 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-3 text-lg shadow-lg hover:shadow-xl disabled:cursor-not-allowed"
           >
             <Shuffle className={loading || animating ? 'animate-spin' : ''} size={28} />
             {loading || animating ? 'Крутим барабан...' : buttonText}
           </button>
 
-          <button
-            onClick={toggleQueue}
-            className="mt-4 w-full py-3 px-6 bg-slate-600 hover:bg-slate-700 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-3 shadow-lg hover:shadow-xl"
-          >
-            {showQueue ? <X size={20} /> : <List size={20} />}
-            {showQueue ? 'Скрыть очередь' : 'Показать очередь'}
-          </button>
-
-          {showCodeInput && !showQueue && (
-            <div className="mt-6 bg-slate-50 rounded-xl p-6 border-2 border-slate-200">
-              <h3 className="text-lg font-bold text-gray-800 mb-4">Введите код доступа</h3>
-              <form onSubmit={handleCodeSubmit} className="space-y-4">
-                <input
-                  type="password"
-                  value={codeInput}
-                  onChange={(e) => setCodeInput(e.target.value)}
-                  placeholder="Код доступа"
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 text-center text-2xl font-bold tracking-widest"
-                  autoFocus
-                  maxLength={4}
-                />
-                {codeError && (
-                  <div className="text-red-600 text-sm font-medium">
-                    {codeError}
-                  </div>
-                )}
-                <div className="flex gap-3">
-                  <button
-                    type="submit"
-                    className="flex-1 py-3 px-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-all"
-                  >
-                    Открыть
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCodeInput(false);
-                      setCodeInput('');
-                      setCodeError('');
-                    }}
-                    className="flex-1 py-3 px-6 bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold rounded-lg transition-all"
-                  >
-                    Отмена
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
-
-          {showQueue && (
-            <div className="mt-6 bg-gray-50 rounded-xl p-4 max-h-96 overflow-y-auto">
-              <h2 className="text-xl font-bold text-gray-800 mb-4">📋 Очередь менеджеров</h2>
-
-              {loadingQueue ? (
-                <div className="text-center py-8 text-gray-500">
-                  Загрузка очереди...
-                </div>
-              ) : queue.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  Нет данных
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {queue.map((item, index) => (
-                    <div
-                      key={index}
-                      className={`p-4 rounded-lg border-2 transition-all ${getPriorityColor(item.priority)}`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <span className="text-lg font-bold text-gray-600">#{index + 1}</span>
-                          <span className="font-semibold">{item.name}</span>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-xs font-medium">{item.priority}</div>
-                          <div className="text-xs text-gray-600 mt-1">
-                            Выборов: {item.selectionCount}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="mt-4 pt-4 border-t border-gray-300">
-                <div className="flex flex-wrap gap-4 text-xs">
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-gray-100 border-2 border-gray-300 rounded"></div>
-                    <span>Ещё не звонили</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-amber-100 border-2 border-amber-300 rounded"></div>
-                    <span>Недозвон</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-green-100 border-2 border-green-300 rounded"></div>
-                    <span>Дозвонились</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
           <div className="mt-6 text-xs text-gray-500">
-            Умная очередь с приоритетами • База данных Supabase
+            Данные загружаются из Google Таблицы
           </div>
         </div>
       </div>
