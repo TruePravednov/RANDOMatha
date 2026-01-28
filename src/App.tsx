@@ -114,6 +114,27 @@ function App() {
             {loading || animating ? 'Крутим барабан...' : buttonText}
           </button>
 
+                    <div className="flex gap-3 mt-4">
+            <button className="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2">
+              <span>☎️</span>
+              Дозвонились ✓
+            </button>
+            <button className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2">
+              <span>✕</span>
+              Не дозвонились
+            </button>
+          </div>
+
+          <button className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg mt-4 flex items-center justify-center gap-2">
+            <span>⚡</span>
+            Приняти в жертву
+          </button>
+
+          <button className="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-lg mt-3 flex items-center justify-center gap-2">
+            <span>📋</span>
+            Показать очередь
+          </button>
+
           <div className="mt-6 text-xs text-gray-500">
             Данные загружаются из Google Таблицы
           </div>
