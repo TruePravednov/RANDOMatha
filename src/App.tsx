@@ -37,6 +37,9 @@ function App() {
   const [showQueue, setShowQueue] = useState(false);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [loadingQueue, setLoadingQueue] = useState(false);
+  const [showCodeInput, setShowCodeInput] = useState(false);
+  const [codeInput, setCodeInput] = useState('');
+  const [codeError, setCodeError] = useState('');
 
   useEffect(() => {
     const randomText = BUTTON_TEXTS[Math.floor(Math.random() * BUTTON_TEXTS.length)];
@@ -112,10 +115,28 @@ function App() {
   };
 
   const toggleQueue = () => {
-    if (!showQueue) {
-      loadQueue();
+    if (showQueue) {
+      setShowQueue(false);
+      setShowCodeInput(false);
+      setCodeInput('');
+      setCodeError('');
+    } else {
+      setShowCodeInput(true);
     }
-    setShowQueue(!showQueue);
+  };
+
+  const handleCodeSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (codeInput === '7610') {
+      setShowQueue(true);
+      setShowCodeInput(false);
+      setCodeError('');
+      setCodeInput('');
+      loadQueue();
+    } else {
+      setCodeError('Неверный код доступа');
+      setCodeInput('');
+    }
   };
 
   const markCallResult = async (isSuccessful: boolean) => {
@@ -240,6 +261,47 @@ function App() {
             {showQueue ? <X size={20} /> : <List size={20} />}
             {showQueue ? 'Скрыть очередь' : 'Показать очередь'}
           </button>
+
+          {showCodeInput && !showQueue && (
+            <div className="mt-6 bg-slate-50 rounded-xl p-6 border-2 border-slate-200">
+              <h3 className="text-lg font-bold text-gray-800 mb-4">Введите код доступа</h3>
+              <form onSubmit={handleCodeSubmit} className="space-y-4">
+                <input
+                  type="password"
+                  value={codeInput}
+                  onChange={(e) => setCodeInput(e.target.value)}
+                  placeholder="Код доступа"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 text-center text-2xl font-bold tracking-widest"
+                  autoFocus
+                  maxLength={4}
+                />
+                {codeError && (
+                  <div className="text-red-600 text-sm font-medium">
+                    {codeError}
+                  </div>
+                )}
+                <div className="flex gap-3">
+                  <button
+                    type="submit"
+                    className="flex-1 py-3 px-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-all"
+                  >
+                    Открыть
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCodeInput(false);
+                      setCodeInput('');
+                      setCodeError('');
+                    }}
+                    className="flex-1 py-3 px-6 bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold rounded-lg transition-all"
+                  >
+                    Отмена
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
 
           {showQueue && (
             <div className="mt-6 bg-gray-50 rounded-xl p-4 max-h-96 overflow-y-auto">
