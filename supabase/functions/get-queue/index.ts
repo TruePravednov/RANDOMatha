@@ -68,30 +68,51 @@ Deno.serve(async (req: Request) => {
       managers.splice(0, managers.length, ...resetManagers!);
     }
 
-    // Разделяем по приоритетам
-    const neverCalled = managers.filter(m => m.last_call_successful === null);
-    const unsuccessfulCalls = managers.filter(m => m.last_call_successful === false);
-    const successfulCalls = managers.filter(m => m.last_call_successful === true);
+    // НОВАЯ ЛОГИКА ОЧЕРЕДИ:
+    // 1. Не выбирались (попадают в рандом)
+    const notSelected = managers.filter(m => (m.selection_count_today || 0) === 0);
+
+    // 2. Недозвон (выбрали и отметили "не дозвонились")
+    const unsuccessfulCalls = managers.filter(m =>
+      (m.selection_count_today || 0) > 0 && m.last_call_successful === false
+    );
+
+    // 3. Просто выбрали (выбрали, но еще не отметили результат)
+    const justSelected = managers.filter(m =>
+      (m.selection_count_today || 0) > 0 && m.last_call_successful === null
+    );
+
+    // 4. Дозвонились (выбрали и отметили "дозвонились")
+    const successfulCalls = managers.filter(m =>
+      (m.selection_count_today || 0) > 0 && m.last_call_successful === true
+    );
 
     // Сортируем каждую группу по количеству выборов
     const sortByCount = (a: any, b: any) =>
       (a.selection_count_today || 0) - (b.selection_count_today || 0);
 
-    neverCalled.sort(sortByCount);
+    notSelected.sort(sortByCount);
     unsuccessfulCalls.sort(sortByCount);
+    justSelected.sort(sortByCount);
     successfulCalls.sort(sortByCount);
 
     // Формируем упорядоченную очередь
     const queue = [
-      ...neverCalled.map(m => ({
+      ...notSelected.map(m => ({
         name: m.name,
-        priority: 'Ещё не звонили',
+        priority: 'В очереди (попадет в рандом)',
         selectionCount: m.selection_count_today || 0,
         lastCallSuccessful: m.last_call_successful
       })),
       ...unsuccessfulCalls.map(m => ({
         name: m.name,
         priority: 'Недозвон',
+        selectionCount: m.selection_count_today || 0,
+        lastCallSuccessful: m.last_call_successful
+      })),
+      ...justSelected.map(m => ({
+        name: m.name,
+        priority: 'Просто выбрали',
         selectionCount: m.selection_count_today || 0,
         lastCallSuccessful: m.last_call_successful
       })),

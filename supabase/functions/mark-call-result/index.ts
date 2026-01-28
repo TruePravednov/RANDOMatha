@@ -51,22 +51,14 @@ Deno.serve(async (req: Request) => {
       throw error;
     }
 
-    // Обновляем менеджера: увеличиваем счетчик и сохраняем результат последнего звонка
-    const { data: manager } = await supabase
+    // Обновляем менеджера: ТОЛЬКО сохраняем результат последнего звонка
+    // (счетчик уже увеличен при выборе)
+    await supabase
       .from("managers")
-      .select("selection_count_today")
-      .eq("name", selection.manager_name)
-      .maybeSingle();
-
-    if (manager) {
-      await supabase
-        .from("managers")
-        .update({
-          selection_count_today: (manager.selection_count_today || 0) + 1,
-          last_call_successful: isSuccessful
-        })
-        .eq("name", selection.manager_name);
-    }
+      .update({
+        last_call_successful: isSuccessful
+      })
+      .eq("name", selection.manager_name);
 
     return new Response(
       JSON.stringify({ success: true }),

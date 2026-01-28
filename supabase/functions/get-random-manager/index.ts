@@ -74,38 +74,26 @@ Deno.serve(async (req: Request) => {
       managers.splice(0, managers.length, ...resetManagers!);
     }
 
-    // Приоритетный выбор менеджера
-    let eligibleManagers = [];
-    let minCount = 0;
+    // НОВАЯ ЛОГИКА: В рандом попадают ТОЛЬКО те, кто еще НЕ ВЫБИРАЛСЯ сегодня
+    const eligibleManagers = managers.filter(m => (m.selection_count_today || 0) === 0);
 
-    // Приоритет 1: Менеджеры, которые еще не были выбраны сегодня (last_call_successful IS NULL)
-    const neverCalled = managers.filter(m => m.last_call_successful === null);
-    if (neverCalled.length > 0) {
-      minCount = Math.min(...neverCalled.map(m => m.selection_count_today || 0));
-      eligibleManagers = neverCalled.filter(m => (m.selection_count_today || 0) === minCount);
-    }
-
-    // Приоритет 2: Менеджеры с недозвоном (last_call_successful = false)
+    // Если все уже выбирались - сбрасываем круг и начинаем заново
     if (eligibleManagers.length === 0) {
-      const unsuccessfulCalls = managers.filter(m => m.last_call_successful === false);
-      if (unsuccessfulCalls.length > 0) {
-        minCount = Math.min(...unsuccessfulCalls.map(m => m.selection_count_today || 0));
-        eligibleManagers = unsuccessfulCalls.filter(m => (m.selection_count_today || 0) === minCount);
-      }
-    }
+      await supabase
+        .from("managers")
+        .update({
+          selection_count_today: 0,
+          last_call_successful: null
+        })
+        .eq("is_present", true);
 
-    // Приоритет 3: Менеджеры с дозвоном (last_call_successful = true)
-    if (eligibleManagers.length === 0) {
-      const successfulCalls = managers.filter(m => m.last_call_successful === true);
-      if (successfulCalls.length > 0) {
-        minCount = Math.min(...successfulCalls.map(m => m.selection_count_today || 0));
-        eligibleManagers = successfulCalls.filter(m => (m.selection_count_today || 0) === minCount);
-      }
-    }
-
-    // Если всё равно никого нет (не должно происходить), берем всех
-    if (eligibleManagers.length === 0) {
-      eligibleManagers = managers;
+      return new Response(
+        JSON.stringify({
+          error: "Все менеджеры прошли круг! Система сброшена. Нажмите еще раз.",
+          resetPerformed: true
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // Выбираем случайного из доступных
@@ -119,13 +107,20 @@ Deno.serve(async (req: Request) => {
       .select("id")
       .single();
 
+    // ВАЖНО: Сразу увеличиваем счетчик выборов (не ждем отметки результата)
+    await supabase
+      .from("managers")
+      .update({
+        selection_count_today: (selectedManager.selection_count_today || 0) + 1
+      })
+      .eq("name", selectedManager.name);
+
     return new Response(
       JSON.stringify({
         name: selectedManager.name,
         total: managers.length,
         selectionId: selection?.id,
-        queuePosition: minCount + 1,
-        eligibleCount: eligibleManagers.length
+        remainingInPool: eligibleManagers.length - 1
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
